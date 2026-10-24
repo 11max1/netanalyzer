@@ -536,6 +536,7 @@ class _DevicesState extends State<Devices> {
 // ---------------- الواي فاي ----------------
 class WifiPage extends StatefulWidget {
   const WifiPage({super.key});
+
   @override
   State<WifiPage> createState() => _WifiPageState();
 }
@@ -544,43 +545,94 @@ class _WifiPageState extends State<WifiPage> {
   List<WiFiAccessPoint> aps = [];
   bool busy = false;
 
-  int _channel(int f) => f >= 5000 ? (f - 5000) ~/ 5 : (f == 2484 ? 14 : (f - 2407) ~/ 5);
+  int _channel(int f) =>
+      f >= 5000 ? (f - 5000) ~/ 5 : (f == 2484 ? 14 : (f - 2407) ~/ 5);
 
   Future<void> _scan() async {
     setState(() => busy = true);
-    await WiFiScan.instance.startScan();
-    if (await WiFiScan.instance.canGetScannedResults() == CanGetScannedResults.yes) {
-      final r = await WiFiScan.instance.getScannedResults();
-      r.sort((a, b) => b.level.compareTo(a.level));
-      aps = r;
+
+    try {
+      await WiFiScan.instance.startScan();
+
+      if (await WiFiScan.instance.canGetScannedResults() ==
+          CanGetScannedResults.yes) {
+        final results = await WiFiScan.instance.getScannedResults();
+
+        results.sort((a, b) => b.level.compareTo(a.level));
+
+        if (mounted) {
+          setState(() {
+            aps = results;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Wi-Fi scan error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => busy = false);
+      }
     }
-    if (mounted) setState(() => busy = false);
   }
 
   @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
-    return Column(children: [
-      Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(children: [
-          Expanded(child: Text('${aps.length} ${s.t('wifi')}', style: Theme.of(context).textTheme.titleMedium)),
-          FilledButton.icon(onPressed: busy ? null : _scan, icon: const Icon(Icons.wifi_find), label: Text(s.t('scan'))),
-        ]),
-      ),
-      if (busy) const LinearProgressIndicator(),
-      Expanded(
-        child: aps.isEmpty
-            ? Center(child: Text(s.t('none')))
-            : ListView.builder(
-                itemCount: aps.length,
-                itemBuilder: (_, i) {
-                  final a = aps[i];
-                  final c = a.level > -60 ? Colors.green : a.level > -75 ? Colors.orange : Colors.red;
-                  return ListTile(
-                    leading: Icon(Icons.wifi, color: c),
-                    title: Text(a.ssid.isEmpty ? '(hidden)' : a.ssid),
-                    subtitle: Text('CH ${_channel(a.frequency)} • ${a.frequency >= 5000 ? '5' : '2.4'} GHz'),
-                    trailing: Text('${a.level} dBm', textDirection: TextDirection.ltr),
-                  );
-     
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${aps.length} ${s.t('wifi')}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: busy ? null : _scan,
+                icon: const Icon(Icons.wifi_find),
+                label: Text(s.t('scan')),
+              ),
+            ],
+          ),
+        ),
+        if (busy) const LinearProgressIndicator(),
+        Expanded(
+          child: aps.isEmpty
+              ? Center(child: Text(s.t('none')))
+              : ListView.builder(
+                  itemCount: aps.length,
+                  itemBuilder: (_, i) {
+                    final a = aps[i];
+
+                    final c = a.level > -60
+                        ? Colors.green
+                        : a.level > -75
+                            ? Colors.orange
+                            : Colors.red;
+
+                    return ListTile(
+                      leading: Icon(Icons.wifi, color: c),
+                      title: Text(
+                        a.ssid.isEmpty ? '(hidden)' : a.ssid,
+                      ),
+                      subtitle: Text(
+                        'CH ${_channel(a.frequency)} • '
+                        '${a.frequency >= 5000 ? '5' : '2.4'} GHz',
+                      ),
+                      trailing: Text(
+                        '${a.level} dBm',
+                        textDirection: TextDirection.ltr,
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+   
